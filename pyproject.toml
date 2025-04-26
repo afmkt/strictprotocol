@@ -5,19 +5,21 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "strictprotocol"
 version = "0.1.0"
-description = "A runtime-enforced Protocol for strict signature matching"
-authors = [{name = "Your Name", email = "your@email.com"}]
-license = {text = "MIT"}
+description = "A stricter Protocol enforcement for Python"
+authors = [{name = "Michael Afmokt", email = "michael@esacca.com"}]
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["protocol", "typing", "type-checking"]
 readme = "README.md"
 requires-python = ">=3.8"
+dependencies = []
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dependencies = [
-    "pytest>=8.3.5",
-]
+
 
 [project.urls]
-Homepage = "https://github.com/YOUR_USERNAME/strictprotocol"
+Homepage = "https://github.com/afmkt/strictprotocol"
+Repository = "https://github.com/afmkt/strictprotocol"
+Issues = "https://github.com/afmkt/strictprotocol/issues"
