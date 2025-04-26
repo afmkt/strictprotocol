@@ -1,5 +1,5 @@
 import inspect
-from typing import Protocol, get_type_hints
+from typing import Protocol, get_type_hints, _ProtocolMeta
 from types import FunctionType, MethodType
 
 def get_callable_members(cls):
@@ -19,7 +19,7 @@ def is_signature_compatible(proto_func, impl_func):
     impl_sig = inspect.signature(impl_func)
     return proto_sig == impl_sig
 
-class StrictProtocolMeta(type):
+class StrictProtocolMeta(_ProtocolMeta):
     def __init__(cls, name, bases, namespace, **kwargs):
         proto_bases = [b for b in bases if isinstance(b, type) and issubclass(b, Protocol)]
         if not proto_bases:
@@ -30,6 +30,8 @@ class StrictProtocolMeta(type):
             impl_methods = get_callable_members(cls)
 
             for method_name, proto_method in proto_methods.items():
+                if method_name == "__init__":  # Skip __init__
+                    continue                
                 if method_name not in impl_methods:
                     raise TypeError(f"{cls.__name__} is missing required method: `{method_name}`")
 
