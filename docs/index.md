@@ -1,0 +1,3 @@
+# StrictProtocol Documentation
+
+Coming soon!
