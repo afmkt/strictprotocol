@@ -47,5 +47,33 @@ class StrictProtocolMeta(_ProtocolMeta):
 
         super().__init__(name, bases, namespace)
 
-class StrictProtocol(metaclass=StrictProtocolMeta):
-    pass
+# class StrictProtocol(metaclass=StrictProtocolMeta):
+#     pass
+
+
+class StrictProtocol:
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)  # Ensure other subclasses work
+
+        # Get all methods from parent Protocol classes (via `mro()`)
+        for proto_base in cls.__mro__[1:]:
+            if isinstance(proto_base, type) and hasattr(proto_base, "__abstractmethods__"):
+                proto_methods = get_callable_members(proto_base)
+                impl_methods = get_callable_members(cls)
+
+                for method_name, proto_method in proto_methods.items():
+                    if method_name == "__init__":  # Skip __init__
+                        continue
+
+                    if method_name not in impl_methods:
+                        raise TypeError(f"{cls.__name__} is missing required method: `{method_name}`")
+
+                    proto_func = unwrap_method(proto_method)
+                    impl_func = unwrap_method(impl_methods[method_name])
+
+                    if not is_signature_compatible(proto_func, impl_func):
+                        raise TypeError(
+                            f"Signature mismatch in `{cls.__name__}.{method_name}`:\n"
+                            f"  Expected: {inspect.signature(proto_func)} with {get_type_hints(proto_func)}\n"
+                            f"  Found:    {inspect.signature(impl_func)} with {get_type_hints(impl_func)}"
+                        )
