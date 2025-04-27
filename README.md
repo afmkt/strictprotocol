@@ -28,9 +28,6 @@ class MyGreeter(StrictProtocol, Greeter):
 pip install strictprotocol
 ```
 
-## 📖 Documentation
-
-Coming soon at [https://github.com/YOUR_USERNAME/strictprotocol](https://github.com/YOUR_USERNAME/strictprotocol)
 
 ## 🧪 Testing
 
