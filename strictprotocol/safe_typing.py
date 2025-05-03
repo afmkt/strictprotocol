@@ -502,13 +502,14 @@ def is_service_class(cls: type, deep: bool = False) -> bool:
 
 
 if __name__ == '__main__':
-    from typing import Optional
-    class A:
-        pass
-    class B(A):
-        pass
-    class C:
-        pass
+    pass
+    # from typing import Optional
+    # class A:
+    #     pass
+    # class B(A):
+    #     pass
+    # class C:
+    #     pass
     # print(safe_subtype(Optional[A], Optional[A]))
     # print(safe_subtype(A, Optional[A]))
     # print(safe_subtype(NoneType, Optional[A]))
@@ -518,19 +519,19 @@ if __name__ == '__main__':
     # print(safe_subtype(C, Optional[A]))
     # print(safe_subtype(Type[Any], Type[Any]))
 
-    EntryFilterType = Union[
-        Type[Any], 
-        Callable[[Any], bool],
-        Tuple[Union['NOT', 'AND', 'OR', 'XOR'], ...]
-    ]
-    class NOT:
-        pass
-    class AND:
-        pass
-    class OR:
-        pass
-    class XOR:
-        pass
+    # EntryFilterType = Union[
+    #     Type[Any], 
+    #     Callable[[Any], bool],
+    #     Tuple[Union['NOT', 'AND', 'OR', 'XOR'], ...]
+    # ]
+    # class NOT:
+    #     pass
+    # class AND:
+    #     pass
+    # class OR:
+    #     pass
+    # class XOR:
+    #     pass
 
-    # print(safe_subtype(Optional[EntryFilterType], Optional[EntryFilterType]))
-    print(safe_subtype(List[NOT], List[NOT]))
+    # # print(safe_subtype(Optional[EntryFilterType], Optional[EntryFilterType]))
+    # print(safe_subtype(List[NOT], List[NOT]))
