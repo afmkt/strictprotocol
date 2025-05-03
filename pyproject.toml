@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "strictprotocol"
-version = "0.1.1"
+version = "0.1.2"
 description = "A stricter Protocol enforcement for Python"
 authors = [{name = "Michael Afmokt", email = "michael@esacca.com"}]
 license = "MIT"
