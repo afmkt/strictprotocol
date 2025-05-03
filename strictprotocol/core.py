@@ -2,6 +2,7 @@ import inspect
 from typing import get_type_hints, Protocol
 from types import FunctionType, MethodType
 from enum import Enum
+from .safe_typing import safe_subtype
 
 class CheckMode(str, Enum):
     """Enum for different check modes."""
@@ -79,7 +80,7 @@ def is_signature_compatible(proto_func, impl_func, *,  mode: CheckMode, class_na
         impl_type = impl_types.get(name)
         if mode in {CheckMode.STRICT, CheckMode.LENIENT}:
             if proto_type and impl_type:
-                if not issubclass(proto_type, impl_type):
+                if not safe_subtype(proto_type, impl_type):
                     raise TypeError(
                         f"Type mismatch for `{name}` in `{class_name}.{method_name}`:"
                         f" Expected: {proto_type}"
@@ -95,7 +96,7 @@ def is_signature_compatible(proto_func, impl_func, *,  mode: CheckMode, class_na
         proto_type = proto_sig.return_annotation
         impl_type = impl_sig.return_annotation
         if proto_type and impl_type:
-            if not issubclass(impl_type, proto_type):
+            if not safe_subtype(impl_type, proto_type):
                 raise TypeError(
                     f"Return annotation mismatch in `{class_name}.{method_name}`:"
                     f" Expected: {proto_type}"
@@ -118,7 +119,7 @@ class StrictProtocol:
         # Get all methods from parent Protocol classes (via `mro()`)
 
         for proto_base in cls.__mro__[1:]:
-            if issubclass(proto_base, Protocol) and not hasattr(proto_base, "__abstractmethods__"):
+            if safe_subtype(proto_base, Protocol) and not hasattr(proto_base, "__abstractmethods__"):
                 # If the base class is a Protocol but not abstract, we should check the fields defined in it
                 # against the fields in the current class.
                 proto_fields = inspect.get_annotations(proto_base)
@@ -135,7 +136,7 @@ class StrictProtocol:
                     else:
                         raise TypeError(f"{cls.__name__} is missing required field: `{field_name}`")
                 
-            elif issubclass(proto_base, Protocol) or hasattr(proto_base, "__abstractmethods__"):
+            elif safe_subtype(proto_base, Protocol) or hasattr(proto_base, "__abstractmethods__"):
                 # If the base class is a Protocol and abstract, we should check the methods defined in it
                 proto_methods = get_callable_members(proto_base)
                 impl_methods = get_callable_members(cls)
