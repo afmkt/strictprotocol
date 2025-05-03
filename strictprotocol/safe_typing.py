@@ -4,9 +4,9 @@ import types
 import collections.abc
 from typing import (
     Any, Union, Literal, List, Dict, Set, Tuple, Callable, ParamSpec,Concatenate,
-    get_origin, get_args, TypeVar, ForwardRef, Annotated
+    get_origin, get_args, TypeVar, ForwardRef, Annotated, Type
 )
-from types import FunctionType
+from types import FunctionType, NoneType
 # import functools
 
 # @functools.lru_cache(maxsize=128)
@@ -57,17 +57,19 @@ def get_callable_signature(obj):
 
 
 
-def resolve_forward_ref(forward_ref: ForwardRef, globalns=None, localns=None):
+def resolve_forward_ref(forward_ref: ForwardRef, globalns, localns):
     try:
-        # resolved = resolve_forward_ref_cached(forward_ref.__forward_arg__, repr(globalns), repr(localns))
-        resolved = forward_ref._evaluate(globalns, localns, frozenset())
-        if isinstance(resolved, ForwardRef):
-            raise TypeError(f"Unresolvable ForwardRef: {forward_ref.__forward_arg__}")
-        return resolved
+        if isinstance(forward_ref, ForwardRef):
+            resolved = forward_ref._evaluate(globalns, localns, frozenset())
+            if isinstance(resolved, ForwardRef):
+                raise TypeError(f"Unresolvable ForwardRef: {forward_ref.__forward_arg__}")
+            return resolved
+        else:
+            return forward_ref
     except Exception:
         raise TypeError(f"Cannot resolve ForwardRef: {forward_ref}")
 
-def safe_isinstance(obj, type_hint, *, globalns=None, localns=None) -> bool:
+def safe_isinstance(obj, type_hint, *, globalns=globals(), localns=locals()) -> bool:
     if isinstance(type_hint, ForwardRef):
         type_hint = resolve_forward_ref(type_hint, globalns, localns)
         return safe_isinstance(obj, type_hint, globalns=globalns, localns=localns)
@@ -175,29 +177,73 @@ def safe_isinstance(obj, type_hint, *, globalns=None, localns=None) -> bool:
     raise TypeError(f"safe_isinstance does not support this type hint: {type_hint}")
 
 
-def safe_subtype_of_forward_ref(subclass, type_hint, globalns=None, localns=None, treat_literal_as_base_type: bool = False):
-    type_hint = resolve_forward_ref(type_hint, globalns, localns)
-    return safe_subtype( subclass, 
+def safe_subtype_of_forward_ref(subclass, type_hint, globalns, localns, treat_literal_as_base_type: bool):
+    try:
+        type_hint = resolve_forward_ref(type_hint, globalns, localns)
+        if isinstance(subclass, ForwardRef):
+            subclass = resolve_forward_ref(subclass, globalns, localns)
+        return safe_subtype(subclass, 
                             type_hint,
                             globalns=globalns,
                             localns=localns,
                             treat_literal_as_base_type=treat_literal_as_base_type)
+    except TypeError:
+        if isinstance(subclass, ForwardRef) and isinstance(type_hint, ForwardRef):
+            # If both are ForwardRefs, an we can't resolve them, just compare their __forward_arg__ attributes
+            return subclass.__forward_arg__ == type_hint.__forward_arg__
+        return False
 
-def safe_subtype_of_annotated(subclass, type_hint, globalns=None, localns=None, treat_literal_as_base_type: bool = False):
+def safe_subtype_of_annotated(subclass, type_hint, globalns, localns, treat_literal_as_base_type: bool):
     args = get_args(type_hint)
     return safe_subtype(subclass, args[0],
                             globalns=globalns,
                             localns=localns,
                             treat_literal_as_base_type=treat_literal_as_base_type)
 
-def safe_subtype_of_union(subclass, type_hint, globalns=None, localns=None, treat_literal_as_base_type: bool = False):
-    args = get_args(type_hint)
-    return any(safe_subtype(subclass, arg,
-                               globalns=globalns,
-                               localns=localns,
-                               treat_literal_as_base_type=treat_literal_as_base_type) for arg in args)
+def safe_subtype_of_union(subclass, type_hint, globalns, localns, treat_literal_as_base_type: bool):
+    def safe_flat_union(t):
+        """
+        Flattens a Union type hint into a set of types.
+        Handles nested Unions and other typing constructs.
+        """
+        if get_origin(t) is Union:
+            args = get_args(t)
+            flattened = set()
+            for arg in args:
+                flattened.update(safe_flat_union(arg))
+            return flattened
+        else:
+            return {t}
+    flat_subclass = safe_flat_union(subclass)
+    flat_type_hint = safe_flat_union(type_hint)
+    for s in flat_subclass:
+        found = False
+        for t in flat_type_hint:    
+            if safe_subtype(s, t,
+                            globalns=globalns,
+                            localns=localns,
+                            treat_literal_as_base_type=treat_literal_as_base_type):
+                found = True
+                break
+        if not found:
+            return False
+    return True
 
-def safe_subtype_of_literal(subclass, type_hint, globalns=None, localns=None, treat_literal_as_base_type: bool = False):
+
+
+def safe_subtype_of_type(subclass, type_hint, globalns, localns, treat_literal_as_base_type: bool):
+    if get_origin(subclass) not in (type, Type):
+        return False
+    targs = get_args(type_hint)
+    sargs = get_args(subclass)
+    if len(targs) != 1 or len(sargs) != 1:
+        raise TypeError("Type hint must be a single type argument")
+    return safe_subtype(sargs[0], targs[0],
+                        globalns=globalns,
+                        localns=localns,
+                        treat_literal_as_base_type=treat_literal_as_base_type)
+
+def safe_subtype_of_literal(subclass, type_hint, globalns, localns, treat_literal_as_base_type: bool):
     args = get_args(type_hint)
     if get_origin(subclass) is Literal:
         subclass_args = set(get_args(subclass))
@@ -212,7 +258,7 @@ def safe_subtype_of_literal(subclass, type_hint, globalns=None, localns=None, tr
         raise TypeError("safe_subtype does not support Literal without treat_literal_as_base_type=True")
 
 
-def safe_subtype_of_typevar(subclass, type_hint, globalns=None, localns=None, treat_literal_as_base_type: bool = False):
+def safe_subtype_of_typevar(subclass, type_hint, globalns, localns, treat_literal_as_base_type: bool ):
     if type_hint.__constraints__:
         return any(safe_subtype(subclass, c,
                                     globalns=globalns,
@@ -227,52 +273,70 @@ def safe_subtype_of_typevar(subclass, type_hint, globalns=None, localns=None, tr
             return False        
     return True  # unconstrained TypeVar matches anything
 
-def safe_subtype_of_list(subclass, type_hint, globalns=None, localns=None, treat_literal_as_base_type: bool = False):
-    args = get_args(type_hint)
-    return isinstance(subclass, list) and all(
-        safe_subtype(e, args[0],
-                    globalns=globalns,
-                    localns=localns,
-                    treat_literal_as_base_type=treat_literal_as_base_type) for e in subclass)
+def safe_subtype_of_list(subclass, type_hint, globalns, localns, treat_literal_as_base_type: bool):
+    if subclass not in (List, list) and get_origin(subclass) not in (List, list):
+        return False
+    targs = get_args(type_hint)
+    sargs = get_args(subclass)
+    return safe_subtype(sargs[0], 
+                        targs[0],
+                        globalns=globalns,
+                        localns=localns,
+                        treat_literal_as_base_type=treat_literal_as_base_type)
 
-def safe_subtype_of_dict(subclass, type_hint, globalns=None, localns=None, treat_literal_as_base_type: bool = False):
-    args = get_args(type_hint)
-    return isinstance(subclass, dict) and all(
-        safe_subtype(k, args[0],
-                    globalns=globalns,
-                    localns=localns,
-                    treat_literal_as_base_type=treat_literal_as_base_type) and
-        safe_subtype(v, args[1],
+def safe_subtype_of_dict(subclass, type_hint, globalns, localns, treat_literal_as_base_type: bool):
+    if subclass not in (Dict, dict) and get_origin(subclass) not in (Dict, dict):
+        return False
+    targs = get_args(type_hint)
+    sargs = get_args(subclass)
+    # the key of a dict is like a parameter of a function
+    # the value of a dict is like the return type of a function
+    # so key is contravariant and value is covariant
+    k = safe_subtype(targs[0], 
+                     sargs[0],
                     globalns=globalns,
                     localns=localns,
                     treat_literal_as_base_type=treat_literal_as_base_type)
-        for k, v in subclass.items())
-
-def safe_subtype_of_set(subclass, type_hint, globalns=None, localns=None, treat_literal_as_base_type: bool = False):
-    args = get_args(type_hint)
-    return isinstance(subclass, set) and all(
-        safe_subtype(e, args[0],
+    v = safe_subtype(sargs[1], 
+                     targs[1],
                     globalns=globalns,
                     localns=localns,
-                    treat_literal_as_base_type=treat_literal_as_base_type) for e in subclass)
+                    treat_literal_as_base_type=treat_literal_as_base_type)
+    return  k and v
 
-def safe_subtype_of_tuple(subclass, type_hint, globalns=None, localns=None, treat_literal_as_base_type: bool = False):
-    args = get_args(type_hint)    
-    if not isinstance(subclass, tuple):
+def safe_subtype_of_set(subclass, type_hint, globalns, localns, treat_literal_as_base_type: bool):
+    if subclass not in (Set, set) and get_origin(subclass) not in (Set, set):
         return False
-    if len(args) == 2 and args[1] is Ellipsis:
-        return all(safe_subtype(e, args[0],
-                                globalns=globalns,
-                                localns=localns,
-                                treat_literal_as_base_type=treat_literal_as_base_type) for e in subclass)
-    if len(args) != len(subclass):
+    targs = get_args(type_hint)
+    sargs = get_args(subclass)
+    return safe_subtype(sargs[0], 
+                        targs[0],
+                        globalns=globalns,
+                        localns=localns,
+                        treat_literal_as_base_type=treat_literal_as_base_type)
+
+
+
+def safe_subtype_of_tuple(subclass, type_hint, globalns, localns, treat_literal_as_base_type: bool):
+    if subclass not in (Tuple, tuple) and get_origin(subclass) not in (Tuple, tuple):
         return False
-    return all(safe_subtype(o, t,
+    targs = get_args(type_hint)  
+    sargs = get_args(subclass)
+    for s, t in zip(sargs, targs):
+        if s is Ellipsis and t is not Ellipsis:
+            return False
+        if t is Ellipsis:
+            # If the type hint is a tuple with Ellipsis, we can skip checking the rest
+            break
+        if not safe_subtype(s, 
+                            t,
                             globalns=globalns,
                             localns=localns,
-                            treat_literal_as_base_type=treat_literal_as_base_type) for o, t in zip(subclass, args))
+                            treat_literal_as_base_type=treat_literal_as_base_type):
+            return False
+    return True
 
-def safe_subtype_of_callable(subclass, type_hint, globalns=None, localns=None, treat_literal_as_base_type: bool = False):
+def safe_subtype_of_callable(subclass, type_hint, globalns, localns, treat_literal_as_base_type: bool):
     if get_origin(subclass) not in (Callable, collections.abc.Callable):
         return False
     expected = get_args(type_hint)
@@ -339,12 +403,13 @@ def safe_subtype(
     subclass,
     type_hint,
     *,
-    globalns=None,
-    localns=None,
+    globalns=globals(),
+    localns=locals(),
     treat_literal_as_base_type: bool = False
 ) -> bool:
     if isinstance(type_hint, ForwardRef):
-        return safe_subtype_of_forward_ref(subclass, type_hint, globalns, localns, treat_literal_as_base_type)
+        return safe_subtype_of_forward_ref(subclass, type_hint, globalns=globalns, localns=localns, treat_literal_as_base_type=treat_literal_as_base_type)
+
     if isinstance(type_hint, FunctionType) and hasattr(type_hint, '__supertype__'):
         return safe_subtype(subclass, type_hint.__supertype__,
                             globalns=globalns,
@@ -363,6 +428,8 @@ def safe_subtype(
     if origin is Annotated:
         return safe_subtype_of_annotated(subclass, type_hint, globalns=globalns, localns=localns, treat_literal_as_base_type=treat_literal_as_base_type)
     if inspect.isclass(type_hint):
+        if not inspect.isclass(subclass):
+            return False
         return issubclass(subclass, type_hint)
     if origin is Union:
         return safe_subtype_of_union(subclass, type_hint, globalns=globalns, localns=localns, treat_literal_as_base_type=treat_literal_as_base_type)
@@ -378,6 +445,8 @@ def safe_subtype(
         return safe_subtype_of_tuple(subclass, type_hint, globalns=globalns, localns=localns, treat_literal_as_base_type=treat_literal_as_base_type)    
     if origin in (Callable, collections.abc.Callable):
         return safe_subtype_of_callable(subclass, type_hint, globalns=globalns, localns=localns, treat_literal_as_base_type=treat_literal_as_base_type)        
+    if origin in (type, Type):
+        return safe_subtype_of_type(subclass, type_hint, globalns=globalns, localns=localns, treat_literal_as_base_type=treat_literal_as_base_type)
     return issubclass(subclass, type_hint)
 
     
@@ -433,4 +502,35 @@ def is_service_class(cls: type, deep: bool = False) -> bool:
 
 
 if __name__ == '__main__':
-    pass
+    from typing import Optional
+    class A:
+        pass
+    class B(A):
+        pass
+    class C:
+        pass
+    # print(safe_subtype(Optional[A], Optional[A]))
+    # print(safe_subtype(A, Optional[A]))
+    # print(safe_subtype(NoneType, Optional[A]))
+    # print(safe_subtype(Union[A], Optional[A]))
+    # print(safe_subtype(Union[NoneType], Optional[A]))
+    # print(safe_subtype(B, Optional[A]))
+    # print(safe_subtype(C, Optional[A]))
+    # print(safe_subtype(Type[Any], Type[Any]))
+
+    EntryFilterType = Union[
+        Type[Any], 
+        Callable[[Any], bool],
+        Tuple[Union['NOT', 'AND', 'OR', 'XOR'], ...]
+    ]
+    class NOT:
+        pass
+    class AND:
+        pass
+    class OR:
+        pass
+    class XOR:
+        pass
+
+    # print(safe_subtype(Optional[EntryFilterType], Optional[EntryFilterType]))
+    print(safe_subtype(List[NOT], List[NOT]))

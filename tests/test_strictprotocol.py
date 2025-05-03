@@ -1,6 +1,6 @@
 import pytest
-from typing import Protocol
-from strictprotocol import StrictProtocol,is_signature_compatible, CheckMode
+from typing import Protocol, Optional, Any, List, Callable, Union, Tuple, Type
+from strictprotocol import StrictProtocol, is_signature_compatible, CheckMode
 
 # --- Valid Implementation ---
 
@@ -197,3 +197,45 @@ def test_mixed_kinds_fail():
         # `c` should be keyword-only
     with pytest.raises(TypeError):
         is_signature_compatible(P7.do, Bad().do, mode=CheckMode.STRICT, class_name="Bad", method_name="do")
+
+
+
+EntryFilterType = Union[
+    Type[Any], 
+    Callable[[Any], bool],
+    Tuple[Union['NOT', 'AND', 'OR', 'XOR'], ...]
+]
+
+class Entry:
+    pass
+class NOT:
+    pass
+class AND:
+    pass
+class OR:
+    pass
+class XOR:
+    pass
+
+class ContainerProtocol(Protocol):
+    def put(self, item: Any, **tags) -> Optional[Entry]:
+        raise NotImplementedError
+
+    def find(self, types: Optional[EntryFilterType] = None, **tags) -> List[Entry]:
+        raise NotImplementedError
+
+    def resolve(self, types: EntryFilterType, scopes: dict = {}, tags: dict = {}, *args, **kwargs) -> Any:
+        raise NotImplementedError
+
+
+def test_optional_args():
+
+    class RootContainer(StrictProtocol, ContainerProtocol):
+        def put(self, item: Any, **tags)-> Optional[Entry]:
+            return None
+            
+        def find(self, types: Optional[EntryFilterType] = None, **tags) -> List[Entry]:
+            return []
+
+        def resolve(self, types: EntryFilterType, scopes: dict = {}, tags: dict = {},  *args, **kwargs) -> Any:
+            pass
