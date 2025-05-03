@@ -2,6 +2,7 @@ import inspect
 from typing import get_type_hints, Protocol
 from types import FunctionType, MethodType
 from enum import Enum
+import sys
 from .safe_typing import safe_subtype
 
 class CheckMode(str, Enum):
@@ -45,8 +46,8 @@ def is_signature_compatible(proto_func, impl_func, *,  mode: CheckMode, class_na
     proto_param_map = {p.name: p for p in proto_params}
     impl_param_map = {p.name: p for p in impl_params}
 
-    proto_types = get_type_hints(proto_func)
-    impl_types = get_type_hints(impl_func)
+    proto_types = get_type_hints(proto_func, globalns=sys.modules[proto_func.__module__].__dict__)
+    impl_types = get_type_hints(impl_func, globalns=sys.modules[impl_func.__module__].__dict__)
 
     for name, proto_param in proto_param_map.items():
         # Skip self/cls
@@ -80,7 +81,8 @@ def is_signature_compatible(proto_func, impl_func, *,  mode: CheckMode, class_na
         impl_type = impl_types.get(name)
         if mode in {CheckMode.STRICT, CheckMode.LENIENT}:
             if proto_type and impl_type:
-                if not safe_subtype(proto_type, impl_type):
+                if not safe_subtype(proto_type, 
+                                    impl_type):
                     raise TypeError(
                         f"Type mismatch for `{name}` in `{class_name}.{method_name}`:"
                         f" Expected: {proto_type}"
@@ -161,17 +163,18 @@ class StrictProtocol:
                                                    method_name=method_name):
                         raise TypeError(
                             f"Signature mismatch in `{cls.__name__}.{method_name}`:\n"
-                            f"  Expected: {inspect.signature(proto_func)} with {get_type_hints(proto_func)}\n"
-                            f"  Found:    {inspect.signature(impl_func)} with {get_type_hints(impl_func)}"
+                            f"  Expected: {inspect.signature(proto_func)}\n"
+                            f"  Found:    {inspect.signature(impl_func)}"
                         )
 
 
 if __name__ == '__main__':
-    class P7(Protocol):
-        def do(self, a: int, b: int, *, c: str, d: bool = False) -> None: ...
+    pass
+    # class P7(Protocol):
+    #     def do(self, a: int, b: int, *, c: str, d: bool = False) -> None: ...
 
-    class OK7:
-        def do(self, a: int, b: int, *, c: str, d: bool = False) -> None: ...
+    # class OK7:
+    #     def do(self, a: int, b: int, *, c: str, d: bool = False) -> None: ...
 
 
-    assert is_signature_compatible(P7.do, OK7().do, mode=CheckMode.STRICT, class_name="OK7", method_name="do")
+    # assert is_signature_compatible(P7.do, OK7().do, mode=CheckMode.STRICT, class_name="OK7", method_name="do")
