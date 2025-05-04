@@ -8,15 +8,9 @@ from typing import (
     get_origin, get_args, TypeVar, ForwardRef, Annotated, Type
 )
 from types import FunctionType, NoneType
-# import functools
+import functools
 
-# @functools.lru_cache(maxsize=128)
-# def resolve_forward_ref_cached(forward_arg: str, globalns_str: str, localns_str: str):
-#     forward_ref = ForwardRef(forward_arg)
-#     return forward_ref._evaluate(eval(globalns_str), eval(localns_str), frozenset())
-
-
-def get_callable_signature(obj, follow_wrapped: bool = True) -> inspect.Signature:
+def get_callable_signature(obj, follow_wrappers: bool = True) -> inspect.Signature:
     """
     Given a callable object, retrieves its signature.
     Handles normal functions, bound methods, unbound methods, 
@@ -24,39 +18,45 @@ def get_callable_signature(obj, follow_wrapped: bool = True) -> inspect.Signatur
     """
     if not callable(obj):
         raise TypeError(f"Object {obj} is not callable.")
-    
-    # Case 1: If obj is a class, we need to get the signature of its __init__ method
-    if inspect.isclass(obj):  # Class
-        return inspect.signature(obj.__init__, follow_wrapped=follow_wrapped)
-    
-    # Case 2: If obj is a static method, get the signature of the function itself
-    if isinstance(obj, staticmethod):  # Static method
-        return inspect.signature(obj.__func__, follow_wrapped=follow_wrapped)
-    
-    # Case 3: If obj is a class method, get the signature of the function itself
-    if isinstance(obj, classmethod):  # Class method
-        return inspect.signature(obj.__func__, follow_wrapped=follow_wrapped)
-    
-    # Case 4: Normal function or lambda function
-    if isinstance(obj, (types.FunctionType, types.LambdaType)):  # Normal function or lambda
-        return inspect.signature(obj, follow_wrapped=follow_wrapped)
 
-    # Case 5: Bound method (instance method), use the function itself
-    if isinstance(obj, object):  # Bound method (instance method)
-        if hasattr(obj, '__func__'):
-            return inspect.signature(obj.__func__, follow_wrapped=follow_wrapped)
+    # Case 1: If obj is a class, get the signature of its __init__ method
+    if inspect.isclass(obj):
+        return inspect.signature(obj.__init__, follow_wrapped=follow_wrappers)
 
-    # Case 6: Callable object (implements __call__), inspect the __call__ method
-    if isinstance(obj, collections.abc.Callable):  # Callable objects
-        return inspect.signature(obj.__call__, follow_wrapped=follow_wrapped)
+    # Case 2: Static method descriptor
+    if isinstance(obj, staticmethod):
+        return inspect.signature(obj.__func__, follow_wrapped=follow_wrappers)
 
-    # Case 7: Async function or coroutine function
-    if inspect.iscoroutinefunction(obj):  # Async functions
-        return inspect.signature(obj, follow_wrapped=follow_wrapped)
-    
-    # Default case: Should not reach here unless it's a callable we cannot handle
-    raise TypeError(f"Object {obj} is callable, but its signature could not be determined.")
+    # Case 3: Class method descriptor
+    if isinstance(obj, classmethod):
+        return inspect.signature(obj.__func__, follow_wrapped=follow_wrappers)
 
+    # Case 4: Coroutine or async function
+    if inspect.iscoroutinefunction(obj):
+        return inspect.signature(obj, follow_wrapped=follow_wrappers)
+
+    # Case 5: functools.partial
+    if isinstance(obj, functools.partial):
+        return inspect.signature(obj.func, follow_wrapped=follow_wrappers)
+
+    # Case 6: Bound or unbound method
+    if inspect.ismethod(obj):
+        return inspect.signature(obj.__func__, follow_wrapped=follow_wrappers)
+
+    # Case 7: Regular function or lambda
+    if isinstance(obj, (types.FunctionType, types.LambdaType)):
+        return inspect.signature(obj, follow_wrapped=follow_wrappers)
+
+    # Case 8: Callable object (implements __call__)
+    if isinstance(obj, collections.abc.Callable):
+        try:
+            return inspect.signature(obj, follow_wrapped=follow_wrappers)
+        except (TypeError, ValueError):
+            # Fallback to inspecting __call__
+            return inspect.signature(obj.__call__, follow_wrapped=follow_wrappers)
+
+    # If we reach this point, we rely on inspect.signature directly for the last case
+    return inspect.signature(obj, follow_wrapped=follow_wrappers)
 
 
 def resolve_forward_ref(forward_ref: ForwardRef, globalns, localns):
