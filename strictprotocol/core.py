@@ -288,13 +288,13 @@ def check_cls(cls, mode: CheckMode = CheckMode.STRICT):
 
 
 class StrictProtocol:    
-    def __init_subclass__(cls, mode: CheckMode = CheckMode.STRICT , as_error: bool = True,  **kwargs):
+    def __init_subclass__(cls, *, mode: CheckMode = CheckMode.STRICT, raise_exception: bool = True, **kwargs):
         super().__init_subclass__(**kwargs)  # Ensure other subclasses work
         # Get all methods from parent Protocol classes (via `mro()`)
         try:
             check_cls(cls, mode=mode)
         except ProtocolError as e:
-            if as_error:
+            if raise_exception:
                 raise e
             else:
                 print(e)
