@@ -50,6 +50,24 @@ def get_callable_members(cls):
     }
 
 
+def get_best_effort_annotations(func):
+    try:
+        # Try to resolve all annotations
+        return get_type_hints(func, globalns=sys.modules[func.__module__].__dict__)
+    except (NameError, TypeError) as e:
+        # Fallback to raw annotations if resolution fails
+        print(f"Warning: get_type_hints failed: {e}")
+        sig = inspect.signature(func)
+        annotations = {
+            name: param.annotation if param.annotation is not inspect.Parameter.empty else None
+            for name, param in sig.parameters.items()
+        }
+        # Add return annotation if present
+        if sig.return_annotation is not inspect.Signature.empty:
+            annotations['return'] = sig.return_annotation
+        return annotations
+
+
 def is_signature_compatible(proto_func, impl_func, *,  mode: CheckMode, class_name: str, method_name: str):
     proto_sig = inspect.signature(proto_func)
     impl_sig = inspect.signature(impl_func)
@@ -80,6 +98,8 @@ def is_signature_compatible(proto_func, impl_func, *,  mode: CheckMode, class_na
                 actual="None"
             )
             
+    proto_types = get_best_effort_annotations(proto_func)
+    impl_types = get_best_effort_annotations(impl_func)
 
     proto_param_map = {p.name: p for p in proto_params}
     impl_param_map = {p.name: p for p in impl_params}
@@ -122,12 +142,41 @@ def is_signature_compatible(proto_func, impl_func, *,  mode: CheckMode, class_na
                 )
 
         # Check types
-        proto_p = proto_param_map.get(name)
-        proto_type = proto_p.annotation if proto_p and proto_p.annotation is not inspect.Parameter.empty else None
-        impl_p = impl_param_map.get(name)
-        impl_type = impl_p.annotation if impl_p and impl_p.annotation is not inspect.Parameter.empty else None
+        proto_type = proto_types.get(name) 
+        impl_type = impl_types.get(name) 
         if mode in {CheckMode.STRICT, CheckMode.LENIENT}:
-            if proto_type and impl_type:
+            if isinstance(proto_type,str) and isinstance(impl_type,str):
+                if proto_type != impl_type:
+                    raise ProtocolError(
+                        "Parameter type mismatch",
+                        class_name=class_name,
+                        method_name=method_name,
+                        parameter_name=name,
+                        expected=proto_type,
+                        actual=impl_type
+                    )
+            elif isinstance(proto_type, str) and not isinstance(impl_type, str):
+                if proto_type != impl_type.__name__:
+                    raise ProtocolError(
+                        "Parameter type mismatch",
+                        class_name=class_name,
+                        method_name=method_name,
+                        parameter_name=name,
+                        expected=proto_type,
+                        actual=impl_type
+                    )
+            elif isinstance(impl_type, str) and not isinstance(proto_type, str):
+                if impl_type != proto_type.__name__:
+                    raise ProtocolError(
+                        "Parameter type mismatch",
+                        class_name=class_name,
+                        method_name=method_name,
+                        parameter_name=name,
+                        expected=proto_type,
+                        actual=impl_type
+                    )
+
+            elif proto_type and impl_type:
                 if not safe_subtype(proto_type, 
                                     impl_type):                    
                     raise ProtocolError(
