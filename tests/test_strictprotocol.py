@@ -1,6 +1,6 @@
 import pytest
 from typing import Protocol, Optional, Any, List, Callable, Union, Tuple, Type
-from strictprotocol import StrictProtocol, is_signature_compatible, CheckMode
+from strictprotocol import StrictProtocol, is_signature_compatible, CheckMode, ProtocolError
 
 # --- Valid Implementation ---
 
@@ -21,10 +21,20 @@ def test_missing_method_raises():
     class P(Protocol):
         def do(self) -> None: ...
 
-    with pytest.raises(TypeError, match="missing required method"):
+    with pytest.raises(ProtocolError, match="Error: Method not found"):
         class Impl(StrictProtocol, P):
             def other(self) -> None:
                 pass
+
+def test_warning_mode(capsys):
+    class P(Protocol):
+        def do(self) -> None: ...
+
+    class Impl(StrictProtocol, P, as_error=False):
+        def other(self) -> None:
+            pass
+    out = capsys.readouterr().out
+    assert "Error: Method not found" in out
 
 # --- Signature Mismatch ---
 
@@ -32,7 +42,7 @@ def test_signature_mismatch_raises():
     class P(Protocol):
         def do(self, x: int) -> str: ...
 
-    with pytest.raises(TypeError, match="Type mismatch for `x`"):
+    with pytest.raises(ProtocolError, match="Error: Parameter type mismatch"):
         class Impl(StrictProtocol, P):
             def do(self, x):  # missing return annotation
                 return str(x)
@@ -41,7 +51,7 @@ def test_signature_mismatch_raises2():
     class P(Protocol):
         def do(self, x: int) -> str: ...
 
-    with pytest.raises(TypeError, match="Type mismatch for `x`"):
+    with pytest.raises(ProtocolError, match="Error: Parameter type mismatch"):
         class Impl(StrictProtocol, P):
             def do(self, x)->str:  # missing return annotation
                 return str(x)
@@ -80,7 +90,7 @@ def test_keyword_only_pass():
 def test_keyword_only_fail():
     class Bad:
         def m(self, a: int, b: str) -> None: ...
-    with pytest.raises(TypeError):
+    with pytest.raises(ProtocolError):
         is_signature_compatible(P1.m, Bad().m, mode=CheckMode.STRICT, class_name="Bad", method_name="m")
 
 
@@ -99,7 +109,7 @@ def test_args_pass():
 def test_args_fail():
     class Bad:
         def f(self) -> None: ...
-    with pytest.raises(TypeError):
+    with pytest.raises(ProtocolError):
         is_signature_compatible(P2.f, Bad().f, mode=CheckMode.STRICT, class_name="Bad", method_name="f")
 
 
@@ -118,7 +128,7 @@ def test_type_pass():
 def test_type_fail():
     class Bad:
         def g(self, x: str) -> None: ...
-    with pytest.raises(TypeError):
+    with pytest.raises(ProtocolError):
         is_signature_compatible(P3.g, Bad().g, mode = CheckMode.STRICT, class_name="Bad", method_name="g")
 
 
@@ -137,7 +147,7 @@ def test_default_pass():
 def test_default_fail():
     class Bad:
         def h(self, x: int) -> None: ...
-    with pytest.raises(TypeError):
+    with pytest.raises(ProtocolError):
         is_signature_compatible(P4.h, Bad().h, mode=CheckMode.STRICT, class_name="Bad", method_name="h")
 
 
@@ -156,7 +166,7 @@ def test_kwargs_pass():
 def test_kwargs_fail():
     class Bad:
         def x(self) -> None: ...
-    with pytest.raises(TypeError):
+    with pytest.raises(ProtocolError):
         is_signature_compatible(P5.x, Bad().x, mode=CheckMode.STRICT, class_name="Bad", method_name="x")
 
 
@@ -175,7 +185,7 @@ def test_args_kwargs_pass():
 def test_args_kwargs_fail():
     class Bad:
         def do(self, x: int) -> None: ...
-    with pytest.raises(TypeError):
+    with pytest.raises(ProtocolError):
         is_signature_compatible(P6.do, Bad().do, mode=CheckMode.STRICT, class_name="Bad", method_name="do")
 
 
@@ -195,7 +205,7 @@ def test_mixed_kinds_fail():
     class Bad:
         def do(self, a: int, b: int, c: str, d: bool = False) -> None: ...
         # `c` should be keyword-only
-    with pytest.raises(TypeError):
+    with pytest.raises(ProtocolError):
         is_signature_compatible(P7.do, Bad().do, mode=CheckMode.STRICT, class_name="Bad", method_name="do")
 
 

@@ -2,6 +2,7 @@ import typing
 import inspect
 import types
 import collections.abc
+
 from typing import (
     Any, Union, Literal, List, Dict, Set, Tuple, Callable, ParamSpec,Concatenate,
     get_origin, get_args, TypeVar, ForwardRef, Annotated, Type
@@ -15,7 +16,7 @@ from types import FunctionType, NoneType
 #     return forward_ref._evaluate(eval(globalns_str), eval(localns_str), frozenset())
 
 
-def get_callable_signature(obj):
+def get_callable_signature(obj, follow_wrapped: bool = True) -> inspect.Signature:
     """
     Given a callable object, retrieves its signature.
     Handles normal functions, bound methods, unbound methods, 
@@ -26,31 +27,32 @@ def get_callable_signature(obj):
     
     # Case 1: If obj is a class, we need to get the signature of its __init__ method
     if inspect.isclass(obj):  # Class
-        return inspect.signature(obj.__init__)
+        return inspect.signature(obj.__init__, follow_wrapped=follow_wrapped)
     
     # Case 2: If obj is a static method, get the signature of the function itself
     if isinstance(obj, staticmethod):  # Static method
-        return inspect.signature(obj.__func__)
+        return inspect.signature(obj.__func__, follow_wrapped=follow_wrapped)
     
     # Case 3: If obj is a class method, get the signature of the function itself
     if isinstance(obj, classmethod):  # Class method
-        return inspect.signature(obj.__func__)
+        return inspect.signature(obj.__func__, follow_wrapped=follow_wrapped)
     
     # Case 4: Normal function or lambda function
     if isinstance(obj, (types.FunctionType, types.LambdaType)):  # Normal function or lambda
-        return inspect.signature(obj)
+        return inspect.signature(obj, follow_wrapped=follow_wrapped)
 
     # Case 5: Bound method (instance method), use the function itself
     if isinstance(obj, object):  # Bound method (instance method)
-        return inspect.signature(obj.__func__)
+        if hasattr(obj, '__func__'):
+            return inspect.signature(obj.__func__, follow_wrapped=follow_wrapped)
 
     # Case 6: Callable object (implements __call__), inspect the __call__ method
     if isinstance(obj, collections.abc.Callable):  # Callable objects
-        return inspect.signature(obj.__call__)
+        return inspect.signature(obj.__call__, follow_wrapped=follow_wrapped)
 
     # Case 7: Async function or coroutine function
     if inspect.iscoroutinefunction(obj):  # Async functions
-        return inspect.signature(obj)
+        return inspect.signature(obj, follow_wrapped=follow_wrapped)
     
     # Default case: Should not reach here unless it's a callable we cannot handle
     raise TypeError(f"Object {obj} is callable, but its signature could not be determined.")
@@ -476,28 +478,21 @@ def is_service_class(cls: type, deep: bool = False) -> bool:
     if not inspect.isclass(cls):
         return False
 
-    # Determine the class or MRO to inspect
-    classes_to_check = cls.__mro__ if deep else (cls,)
-
+    classes_to_check = cls.__mro__ if deep else [cls]
     has_class_or_static = False
 
-    # Loop through the classes in MRO (or just the class itself)
     for base in classes_to_check:
         for name, attr in base.__dict__.items():
-            # If it's an instance method, reject it
-            if inspect.isfunction(attr):
-                return False  # Found an instance method — not a service class
-
-            # If it's a classmethod or staticmethod, mark it
-            if isinstance(attr, (classmethod, staticmethod)):
-                has_class_or_static = True
-
-            # Special check for __init__ method
             if name == "__init__":
                 if not isinstance(attr, (classmethod, staticmethod)) and attr is not object.__init__:
                     return False
 
-    # Return True if we found at least one classmethod or staticmethod
+            if isinstance(attr, staticmethod) or isinstance(attr, classmethod):
+                has_class_or_static = True
+            elif isinstance(attr, FunctionType):
+                # This is an undecorated instance method
+                return False
+
     return has_class_or_static
 
 
