@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "strictprotocol"
-version = "0.1.5"
+version = "0.1.6"
 description = "A stricter Protocol enforcement for Python"
 authors = [{name = "Michael Afmokt", email = "michael@esacca.com"}]
 license = "MIT"
@@ -27,6 +27,7 @@ Issues = "https://github.com/afmkt/strictprotocol/issues"
 
 [tool.setuptools]
 packages = ["strictprotocol"]  # no src layout, so this is fine
+package-data = { "strictprotocol" = ["py.typed", "*.pyi"] }
 include-package-data = true
 
 

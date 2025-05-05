@@ -4,6 +4,11 @@ from strictprotocol import StrictProtocol, is_signature_compatible, CheckMode, P
 
 # --- Valid Implementation ---
 
+class X(Protocol):
+    pass
+class Y(StrictProtocol, X, raise_exception=False):
+    pass
+
 def test_valid_signature_match():
     class P(Protocol):
         def do(self, x: int) -> str: ...

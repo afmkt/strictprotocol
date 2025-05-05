@@ -1,1 +1,2 @@
+include strictprotocol/py.typed
 recursive-include strictprotocol *.pyi
