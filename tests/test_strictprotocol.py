@@ -35,7 +35,7 @@ def test_warning_mode(capsys):
     class P(Protocol):
         def do(self) -> None: ...
 
-    class Impl(StrictProtocol, P, as_error=False):
+    class Impl(StrictProtocol, P, raise_exception=False):
         def other(self) -> None:
             pass
     out = capsys.readouterr().out
