@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "strictprotocol"
-version = "0.1.4"
+version = "0.1.5"
 description = "A stricter Protocol enforcement for Python"
 authors = [{name = "Michael Afmokt", email = "michael@esacca.com"}]
 license = "MIT"
@@ -23,6 +23,12 @@ classifiers = [
 Homepage = "https://github.com/afmkt/strictprotocol"
 Repository = "https://github.com/afmkt/strictprotocol"
 Issues = "https://github.com/afmkt/strictprotocol/issues"
+
+
+[tool.setuptools]
+packages = ["strictprotocol"]  # no src layout, so this is fine
+include-package-data = true
+
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
