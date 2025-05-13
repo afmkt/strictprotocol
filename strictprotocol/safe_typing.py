@@ -432,6 +432,8 @@ def safe_subtype(
     if inspect.isclass(type_hint):
         if not inspect.isclass(subclass):
             return False
+        if type_hint is type:
+            return isinstance(subclass, type)  # Check if subclass is a class
         return issubclass(subclass, type_hint)
     if origin is Union:
         return safe_subtype_of_union(subclass, type_hint, globalns=globalns, localns=localns, treat_literal_as_base_type=treat_literal_as_base_type)
