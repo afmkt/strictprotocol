@@ -10,6 +10,12 @@ from typing import (
 from types import FunctionType, NoneType
 import functools
 
+def is_bound_method(obj):
+    return hasattr(obj, "__self__") and obj.__self__ is not None
+
+def is_unbound_method(obj):
+    return inspect.isfunction(obj) and not is_bound_method(obj)
+
 def get_callable_signature(obj, follow_wrappers: bool = True) -> inspect.Signature:
     """
     Given a callable object, retrieves its signature.
@@ -41,7 +47,8 @@ def get_callable_signature(obj, follow_wrappers: bool = True) -> inspect.Signatu
 
     # Case 6: Bound or unbound method
     if inspect.ismethod(obj):
-        return inspect.signature(obj.__func__, follow_wrapped=follow_wrappers)
+        return inspect.signature(obj, follow_wrapped=follow_wrappers)
+        # return inspect.signature(obj.__func__, follow_wrapped=follow_wrappers)
 
     # Case 7: Regular function or lambda
     if isinstance(obj, (types.FunctionType, types.LambdaType)):
