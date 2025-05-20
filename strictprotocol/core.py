@@ -68,7 +68,7 @@ def get_best_effort_annotations(func, include_extra:bool = False):
         return annotations
 
 
-def is_signature_compatible(proto_func, impl_func, *,  mode: CheckMode, class_name: str, method_name: str):
+def is_signature_compatible(proto_func, impl_func, *,  mode: CheckMode, class_name: str, method_name: str)->bool:
     proto_sig = inspect.signature(proto_func)
     impl_sig = inspect.signature(impl_func)
     
