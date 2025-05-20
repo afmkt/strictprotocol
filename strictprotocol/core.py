@@ -50,10 +50,10 @@ def get_callable_members(cls):
     }
 
 
-def get_best_effort_annotations(func):
+def get_best_effort_annotations(func, include_extra:bool = False):
     try:
         # Try to resolve all annotations
-        return get_type_hints(func, globalns=sys.modules[func.__module__].__dict__)
+        return get_type_hints(func, include_extras=include_extra, globalns=sys.modules[func.__module__].__dict__)
     except (NameError, TypeError) as e:
         # Fallback to raw annotations if resolution fails
         print(f"Warning: get_type_hints failed: {e}")
